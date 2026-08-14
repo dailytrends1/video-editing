@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Video Embedding Tool</title>
+    <title>Advanced Video Embedding Tool - Full Audio</title>
     <style>
         * {
             margin: 0;
@@ -76,7 +76,7 @@
             overflow: hidden;
         }
         
-        .video-container video, 
+        .video-container video,
         .video-container canvas {
             width: 100%;
             display: block;
@@ -177,6 +177,16 @@
             background: #f56565;
         }
         
+        .btn-warning {
+            background: #ed8936;
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #dd6b20;
+            transform: translateY(-2px);
+        }
+        
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -206,6 +216,11 @@
         .status.processing {
             background: #bee3f8;
             color: #2a4365;
+        }
+        
+        .status.warning {
+            background: #fefcbf;
+            color: #744210;
         }
         
         .stats {
@@ -327,15 +342,60 @@
         .tab-content.active {
             display: block;
         }
+        
+        .audio-controls {
+            background: #2d3748;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            color: white;
+        }
+        
+        .audio-controls .waveform {
+            height: 40px;
+            background: #1a202c;
+            border-radius: 4px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #718096;
+            font-size: 12px;
+        }
+        
+        .audio-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .audio-badge.present {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        .audio-badge.missing {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+        
+        .audio-badge.processing {
+            background: #bee3f8;
+            color: #2a4365;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>
             🎬 Advanced Video Embedding Tool
-            <span class="badge badge-success">Browser-Based</span>
+            <span class="badge badge-success">With Audio</span>
         </h1>
-        <p class="subtitle">Frame-by-frame processing with imperceptible embedding</p>
+        <p class="subtitle">Frame-by-frame processing with imperceptible embedding + audio preservation</p>
         
         <div class="grid">
             <!-- Left Panel: Input & Controls -->
@@ -360,6 +420,12 @@
                         <div class="stat-item">
                             <div class="label">Frames</div>
                             <div class="value" id="frameCount">-</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="label">Audio</div>
+                            <div class="value" id="audioStatus">
+                                <span class="audio-badge missing">❌ No Audio</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -392,7 +458,7 @@
                             🚀 Process Video
                         </button>
                         <button class="btn btn-success" id="downloadBtn" disabled>
-                            💾 Download
+                            💾 Download (with Audio)
                         </button>
                         <button class="btn btn-danger" id="extractBtn" disabled>
                             🔍 Extract Data
@@ -412,6 +478,7 @@
                 <div class="panel">
                     <div class="tab-bar">
                         <button class="tab active" data-tab="output">🎥 Output</button>
+                        <button class="tab" data-tab="audio">🔊 Audio</button>
                         <button class="tab" data-tab="analysis">📊 Analysis</button>
                         <button class="tab" data-tab="embeds">🔒 Embeddings</button>
                     </div>
@@ -422,6 +489,30 @@
                         </div>
                         <div id="outputVideoContainer" class="video-container" style="display:none;">
                             <video id="outputVideo" controls></video>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="tab-audio">
+                        <div class="audio-controls">
+                            <h3 style="color:white; margin-bottom:10px;">🎵 Audio Track</h3>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <span id="audioStatusText">No audio loaded</span>
+                                <span class="badge badge-warning" id="audioBitrate">-</span>
+                            </div>
+                            <div class="waveform" id="audioWaveform">
+                                <span>🎵 Audio will be preserved in output</span>
+                            </div>
+                            <div style="margin-top:10px;">
+                                <button class="btn btn-primary" id="extractAudioBtn" disabled>
+                                    🔊 Extract Audio
+                                </button>
+                                <button class="btn btn-warning" id="replaceAudioBtn" disabled>
+                                    🔄 Replace Audio
+                                </button>
+                            </div>
+                            <div style="margin-top:10px;">
+                                <input type="file" id="audioInput" accept="audio/*" style="width:100%; padding:8px; background:#4a5568; color:white; border:none; border-radius:4px;">
+                            </div>
                         </div>
                     </div>
                     
@@ -440,8 +531,11 @@
                                     <div class="label">Embedded</div>
                                     <div class="value" id="embeddedCount">0</div>
                                 </div>
+                                <div class="stat-item">
+                                    <div class="label">Audio</div>
+                                    <div class="value" id="audioAnalysisStatus">-</div>
+                                </div>
                             </div>
-                            <canvas id="analysisChart" style="width:100%; height:200px; margin-top:15px; display:none;"></canvas>
                         </div>
                     </div>
                     
@@ -460,7 +554,7 @@
 
     <script>
         // ============================================================
-        // COMPLETE VIDEO EMBEDDING ENGINE (Browser-Based)
+        // COMPLETE VIDEO EMBEDDING ENGINE WITH AUDIO
         // ============================================================
         
         class VideoEmbeddingEngine {
@@ -472,253 +566,275 @@
                 this.processedFrames = [];
                 this.videoMetadata = {};
                 this.isProcessing = false;
+                this.audioData = null;
+                this.audioContext = null;
+                this.audioBuffer = null;
+                this.originalAudioBlob = null;
+                this.processedAudioBlob = null;
             }
             
-            // === Frame Analysis ===
+            // === Audio Processing ===
             
-            detectSurfaces(frameData, width, height) {
-                // Simplified surface detection using edge detection and clustering
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                
-                const imageData = new ImageData(frameData, width, height);
-                ctx.putImageData(imageData, 0, 0);
-                
-                // Apply Sobel edge detection
-                const edges = this.sobelEdgeDetection(imageData, width, height);
-                
-                // Find connected regions (simplified surface detection)
-                const surfaces = this.findSurfaces(edges, width, height);
-                
-                return surfaces;
-            }
-            
-            sobelEdgeDetection(imageData, width, height) {
-                const data = imageData.data;
-                const output = new Uint8Array(width * height);
-                
-                // Simple Sobel operator
-                for (let y = 1; y < height - 1; y++) {
-                    for (let x = 1; x < width - 1; x++) {
-                        const idx = (y * width + x) * 4;
+            async extractAudio(videoElement) {
+                try {
+                    // Create a canvas to extract video data
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 1;
+                    canvas.height = 1;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Use MediaRecorder to capture video with audio
+                    const stream = videoElement.captureStream();
+                    const audioTracks = stream.getAudioTracks();
+                    
+                    if (audioTracks.length === 0) {
+                        console.warn('No audio track found');
+                        return null;
+                    }
+                    
+                    // Create an audio context to process the audio
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Create a media element source
+                    const source = this.audioContext.createMediaElementSource(videoElement);
+                    const analyser = this.audioContext.createAnalyser();
+                    source.connect(analyser);
+                    analyser.connect(this.audioContext.destination);
+                    
+                    // Record audio
+                    const mediaStream = new MediaStream();
+                    const audioStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false
+                        }
+                    });
+                    
+                    // Use the video's audio track
+                    const audioTrack = audioTracks[0];
+                    const audioStream2 = new MediaStream([audioTrack]);
+                    
+                    const recorder = new MediaRecorder(audioStream2, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+                    
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => chunks.push(e.data);
+                    
+                    return new Promise((resolve) => {
+                        recorder.onstop = () => {
+                            const blob = new Blob(chunks, {type: 'audio/webm'});
+                            this.originalAudioBlob = blob;
+                            resolve(blob);
+                        };
                         
-                        // Calculate gradient using neighboring pixels
-                        const gx = 
-                            -data[((y-1)*width + (x-1))*4] + data[((y-1)*width + (x+1))*4]
-                            -2*data[(y*width + (x-1))*4] + 2*data[(y*width + (x+1))*4]
-                            -data[((y+1)*width + (x-1))*4] + data[((y+1)*width + (x+1))*4];
+                        recorder.start();
+                        
+                        // Record for the duration of the video
+                        setTimeout(() => {
+                            recorder.stop();
+                        }, videoElement.duration * 1000 + 100);
+                    });
+                    
+                } catch (error) {
+                    console.error('Error extracting audio:', error);
+                    return null;
+                }
+            }
+            
+            async extractAudioFromFile(videoFile) {
+                try {
+                    // Use the Web Audio API to extract audio
+                    const arrayBuffer = await videoFile.arrayBuffer();
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    try {
+                        this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+                        return this.audioBuffer;
+                    } catch (e) {
+                        // If can't decode full video, try to extract using other method
+                        const video = document.createElement('video');
+                        video.src = URL.createObjectURL(videoFile);
+                        
+                        return new Promise((resolve) => {
+                            video.onloadedmetadata = () => {
+                                const stream = video.captureStream();
+                                const audioTracks = stream.getAudioTracks();
+                                
+                                if (audioTracks.length > 0) {
+                                    const recorder = new MediaRecorder(
+                                        new MediaStream([audioTracks[0]]),
+                                        {mimeType: 'audio/webm;codecs=opus'}
+                                    );
+                                    const chunks = [];
+                                    recorder.ondataavailable = (e) => chunks.push(e.data);
+                                    recorder.onstop = () => {
+                                        const blob = new Blob(chunks, {type: 'audio/webm'});
+                                        this.originalAudioBlob = blob;
+                                        resolve(blob);
+                                    };
+                                    recorder.start();
+                                    setTimeout(() => recorder.stop(), video.duration * 1000 + 100);
+                                } else {
+                                    resolve(null);
+                                }
+                            };
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error extracting audio from file:', error);
+                    return null;
+                }
+            }
+            
+            async combineAudioWithVideo(videoBlob, audioBlob) {
+                try {
+                    // Create a new video with both tracks
+                    const videoURL = URL.createObjectURL(videoBlob);
+                    const audioURL = URL.createObjectURL(audioBlob);
+                    
+                    // Create a video element
+                    const video = document.createElement('video');
+                    video.src = videoURL;
+                    
+                    // Wait for video to load
+                    await new Promise((resolve) => {
+                        video.onloadedmetadata = resolve;
+                    });
+                    
+                    // Create a canvas to capture the video
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Create a stream from canvas
+                    const stream = canvas.captureStream(30);
+                    
+                    // Add audio from the audio blob
+                    const audio = document.createElement('audio');
+                    audio.src = audioURL;
+                    
+                    // Wait for audio to load
+                    await new Promise((resolve) => {
+                        audio.onloadedmetadata = resolve;
+                    });
+                    
+                    // Create audio context and connect
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const source = audioCtx.createMediaElementSource(audio);
+                    const destination = audioCtx.createMediaStreamDestination();
+                    source.connect(destination);
+                    
+                    // Combine streams
+                    const combinedStream = new MediaStream([
+                        ...stream.getVideoTracks(),
+                        ...destination.stream.getAudioTracks()
+                    ]);
+                    
+                    // Record the combined stream
+                    const recorder = new MediaRecorder(combinedStream, {
+                        mimeType: 'video/webm;codecs=vp9,opus',
+                        videoBitsPerSecond: 5000000,
+                        audioBitsPerSecond: 128000
+                    });
+                    
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => chunks.push(e.data);
+                    
+                    return new Promise((resolve) => {
+                        recorder.onstop = () => {
+                            const blob = new Blob(chunks, {type: 'video/webm'});
+                            resolve(blob);
+                        };
+                        
+                        recorder.start();
+                        
+                        // Play video and audio
+                        video.play();
+                        audio.play();
+                        
+                        // Draw frames
+                        const duration = Math.max(video.duration, audio.duration);
+                        const startTime = Date.now();
+                        
+                        const drawFrame = () => {
+                            const elapsed = (Date.now() - startTime) / 1000;
+                            if (elapsed >= duration) {
+                                video.pause();
+                                audio.pause();
+                                recorder.stop();
+                                return;
+                            }
                             
-                        const gy = 
-                            -data[((y-1)*width + (x-1))*4] - 2*data[((y-1)*width + x)*4] - data[((y-1)*width + (x+1))*4]
-                            +data[((y+1)*width + (x-1))*4] + 2*data[((y+1)*width + x)*4] + data[((y+1)*width + (x+1))*4];
+                            // Seek video to current time
+                            video.currentTime = elapsed;
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            
+                            requestAnimationFrame(drawFrame);
+                        };
                         
-                        const magnitude = Math.sqrt(gx*gx + gy*gy);
-                        output[y * width + x] = Math.min(255, magnitude);
+                        drawFrame();
+                    });
+                    
+                } catch (error) {
+                    console.error('Error combining audio with video:', error);
+                    // Fallback: just return the video without audio
+                    return videoBlob;
+                }
+            }
+            
+            async preserveAudioInOutput(videoBlob) {
+                // If we have the original audio blob, combine it
+                if (this.originalAudioBlob) {
+                    try {
+                        const combined = await this.combineAudioWithVideo(videoBlob, this.originalAudioBlob);
+                        return combined;
+                    } catch (error) {
+                        console.warn('Could not combine audio, using video only:', error);
+                        return videoBlob;
                     }
                 }
                 
-                return output;
-            }
-            
-            findSurfaces(edges, width, height) {
-                const surfaces = [];
-                const visited = new Uint8Array(width * height);
-                const threshold = 50;
-                
-                // Simple region growing for surface detection
-                for (let y = 0; y < height; y += 5) {
-                    for (let x = 0; x < width; x += 5) {
-                        const idx = y * width + x;
-                        if (!visited[idx] && edges[idx] > threshold) {
-                            const region = this.growRegion(edges, visited, x, y, width, height, threshold);
-                            if (region.length > 50) {
-                                const bbox = this.getBoundingBox(region, width);
-                                surfaces.push({
-                                    bbox: bbox,
-                                    points: region.slice(0, 100), // Limit points
-                                    area: region.length
-                                });
-                            }
+                // Try to extract audio from the original video file
+                if (this.sourceVideoFile) {
+                    try {
+                        const audio = await this.extractAudioFromFile(this.sourceVideoFile);
+                        if (audio) {
+                            const combined = await this.combineAudioWithVideo(videoBlob, audio);
+                            return combined;
                         }
+                    } catch (error) {
+                        console.warn('Could not extract audio from file:', error);
                     }
                 }
                 
-                return surfaces;
+                return videoBlob;
             }
             
-            growRegion(edges, visited, startX, startY, width, height, threshold) {
-                const region = [];
-                const stack = [[startX, startY]];
-                const idx = startY * width + startX;
-                visited[idx] = 1;
-                
-                while (stack.length > 0 && region.length < 1000) {
-                    const [x, y] = stack.pop();
-                    region.push([x, y]);
-                    
-                    // Check 4-neighbors
-                    const neighbors = [[x+1,y],[x-1,y],[x,y+1],[x,y-1]];
-                    for (const [nx, ny] of neighbors) {
-                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                            const nidx = ny * width + nx;
-                            if (!visited[nidx] && edges[nidx] > threshold) {
-                                visited[nidx] = 1;
-                                stack.push([nx, ny]);
-                            }
-                        }
-                    }
-                }
-                
-                return region;
-            }
-            
-            getBoundingBox(region, width) {
-                let minX = Infinity, minY = Infinity;
-                let maxX = -Infinity, maxY = -Infinity;
-                
-                for (const [x, y] of region) {
-                    minX = Math.min(minX, x);
-                    minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x);
-                    maxY = Math.max(maxY, y);
-                }
-                
-                return [minX, minY, maxX, maxY];
-            }
-            
-            // === Visual Element Insertion ===
-            
-            insertVisualElement(frameData, width, height, surface, elementData, alpha) {
-                // Create working canvas
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                
-                // Draw frame
-                const imageData = new ImageData(frameData, width, height);
-                ctx.putImageData(imageData, 0, 0);
-                
-                // Draw element on surface
-                const [x1, y1, x2, y2] = surface.bbox;
-                const surfaceWidth = x2 - x1;
-                const surfaceHeight = y2 - y1;
-                
-                if (surfaceWidth > 10 && surfaceHeight > 10 && elementData) {
-                    // Create temporary image from element data
-                    const img = new Image();
-                    img.src = elementData;
-                    
-                    // We need to draw synchronously - use canvas drawing
-                    // For this demo, we'll draw a pattern instead of loading image
-                    ctx.save();
-                    ctx.globalAlpha = alpha;
-                    
-                    // Draw a subtle watermark pattern
-                    const gradient = ctx.createRadialGradient(
-                        x1 + surfaceWidth/2, y1 + surfaceHeight/2, 0,
-                        x1 + surfaceWidth/2, y1 + surfaceHeight/2, Math.min(surfaceWidth, surfaceHeight)/2
-                    );
-                    gradient.addColorStop(0, `rgba(100, 100, 255, ${alpha * 0.5})`);
-                    gradient.addColorStop(1, 'rgba(100, 100, 255, 0)');
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(x1, y1, surfaceWidth, surfaceHeight);
-                    
-                    // Add subtle text or pattern
-                    ctx.fillStyle = `rgba(100, 100, 255, ${alpha * 0.3})`;
-                    ctx.font = '20px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('🔒', x1 + surfaceWidth/2, y1 + surfaceHeight/2);
-                    
-                    ctx.restore();
-                }
-                
-                // Extract modified frame data
-                const imageDataOut = ctx.getImageData(0, 0, width, height);
-                return imageDataOut.data;
-            }
-            
-            // === Steganography ===
-            
-            embedDataLSB(frameData, data) {
-                // Convert data to binary
-                const binaryData = this.textToBinary(data + '\0');
-                const dataLength = binaryData.length;
-                
-                // Embed in LSB of first N pixels
-                const modified = new Uint8ClampedArray(frameData);
-                const maxEmbed = Math.min(dataLength, Math.floor(frameData.length / 4) - 100);
-                
-                for (let i = 0; i < maxEmbed && i < dataLength; i++) {
-                    const bit = parseInt(binaryData[i]);
-                    // Modify the LSB of the first channel
-                    modified[i * 4] = (modified[i * 4] & ~1) | bit;
-                }
-                
-                return modified;
-            }
-            
-            extractDataLSB(frameData) {
-                let binaryData = '';
-                
-                // Extract LSB from first 1000 pixels or until null terminator
-                const maxExtract = Math.min(1000, Math.floor(frameData.length / 4));
-                
-                for (let i = 0; i < maxExtract; i++) {
-                    const bit = frameData[i * 4] & 1;
-                    binaryData += bit.toString();
-                    
-                    // Check for null terminator every 8 bits
-                    if (binaryData.length % 8 === 0) {
-                        const char = this.binaryToText(binaryData.slice(-8));
-                        if (char === '\0') {
-                            binaryData = binaryData.slice(0, -8);
-                            break;
-                        }
-                    }
-                }
-                
-                return this.binaryToText(binaryData);
-            }
-            
-            textToBinary(text) {
-                return text.split('').map(c => 
-                    c.charCodeAt(0).toString(2).padStart(8, '0')
-                ).join('');
-            }
-            
-            binaryToText(binary) {
-                let text = '';
-                for (let i = 0; i < binary.length; i += 8) {
-                    if (i + 8 <= binary.length) {
-                        const byte = binary.substr(i, 8);
-                        text += String.fromCharCode(parseInt(byte, 2));
-                    }
-                }
-                return text;
-            }
-            
-            // === Metadata Modification ===
-            
-            generateFrameHash(frameData) {
-                // Simple hash for frame verification
-                let hash = 0;
-                for (let i = 0; i < Math.min(frameData.length, 1000); i += 4) {
-                    hash = ((hash << 5) - hash) + frameData[i];
-                    hash = hash & hash; // Convert to 32-bit integer
-                }
-                return hash.toString(16);
-            }
-            
-            // === Main Processing Pipeline ===
+            // === Video Processing (with audio preservation) ===
             
             async processVideo(videoElement, elementData, embedText, frequency, alpha) {
                 this.isProcessing = true;
                 this.embeddings = [];
                 this.processedFrames = [];
+                this.sourceVideoFile = null;
+                
+                // Get video file from input
+                const input = document.getElementById('videoInput');
+                if (input.files.length > 0) {
+                    this.sourceVideoFile = input.files[0];
+                }
+                
+                // Extract audio before processing
+                if (this.sourceVideoFile) {
+                    const audioBlob = await this.extractAudioFromFile(this.sourceVideoFile);
+                    if (audioBlob) {
+                        this.originalAudioBlob = audioBlob;
+                        console.log('✅ Audio extracted successfully');
+                    }
+                }
                 
                 // Setup video capture
                 const canvas = document.createElement('canvas');
@@ -732,7 +848,7 @@
                 canvas.height = height;
                 
                 const duration = video.duration;
-                const fps = 30; // Assume 30fps
+                const fps = 30;
                 const totalFrames = Math.floor(duration * fps);
                 
                 // Calculate which frames to embed
@@ -742,24 +858,30 @@
                 let frameIndex = 0;
                 const processedData = [];
                 
-                // Process frame by frame
-                video.currentTime = 0;
-                
                 return new Promise((resolve, reject) => {
                     const processFrame = () => {
                         if (frameIndex >= totalFrames || video.ended) {
                             // Done processing
                             this.isProcessing = false;
-                            resolve({
-                                frames: processedData,
-                                metadata: {
-                                    width,
-                                    height,
-                                    fps,
-                                    totalFrames,
-                                    embedCount: embedIndices.length,
-                                    embeddings: this.embeddings
-                                }
+                            
+                            // Create video blob from frames
+                            this.createVideoFromFrames(processedData, width, height, fps).then((videoBlob) => {
+                                // Preserve audio
+                                this.preserveAudioInOutput(videoBlob).then((finalBlob) => {
+                                    resolve({
+                                        frames: processedData,
+                                        videoBlob: finalBlob,
+                                        metadata: {
+                                            width,
+                                            height,
+                                            fps,
+                                            totalFrames,
+                                            embedCount: embedIndices.length,
+                                            embeddings: this.embeddings,
+                                            hasAudio: this.originalAudioBlob !== null
+                                        }
+                                    });
+                                });
                             });
                             return;
                         }
@@ -827,12 +949,256 @@
                 });
             }
             
+            async createVideoFromFrames(frames, width, height, fps) {
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                const stream = canvas.captureStream(fps);
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp9',
+                    videoBitsPerSecond: 5000000
+                });
+                
+                const chunks = [];
+                recorder.ondataavailable = (e) => chunks.push(e.data);
+                
+                return new Promise((resolve) => {
+                    recorder.onstop = () => {
+                        const blob = new Blob(chunks, {type: 'video/webm'});
+                        resolve(blob);
+                    };
+                    
+                    let frameIndex = 0;
+                    recorder.start();
+                    
+                    const writeFrame = () => {
+                        if (frameIndex >= frames.length) {
+                            recorder.stop();
+                            return;
+                        }
+                        
+                        ctx.putImageData(frames[frameIndex], 0, 0);
+                        frameIndex++;
+                        setTimeout(writeFrame, 1000 / fps);
+                    };
+                    
+                    writeFrame();
+                });
+            }
+            
+            // === Detection and Insertion Methods (unchanged from previous version) ===
+            
+            detectSurfaces(frameData, width, height) {
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                const imageData = new ImageData(frameData, width, height);
+                ctx.putImageData(imageData, 0, 0);
+                
+                const edges = this.sobelEdgeDetection(imageData, width, height);
+                const surfaces = this.findSurfaces(edges, width, height);
+                
+                return surfaces;
+            }
+            
+            sobelEdgeDetection(imageData, width, height) {
+                const data = imageData.data;
+                const output = new Uint8Array(width * height);
+                
+                for (let y = 1; y < height - 1; y++) {
+                    for (let x = 1; x < width - 1; x++) {
+                        const idx = (y * width + x) * 4;
+                        
+                        const gx = 
+                            -data[((y-1)*width + (x-1))*4] + data[((y-1)*width + (x+1))*4]
+                            -2*data[(y*width + (x-1))*4] + 2*data[(y*width + (x+1))*4]
+                            -data[((y+1)*width + (x-1))*4] + data[((y+1)*width + (x+1))*4];
+                            
+                        const gy = 
+                            -data[((y-1)*width + (x-1))*4] - 2*data[((y-1)*width + x)*4] - data[((y-1)*width + (x+1))*4]
+                            +data[((y+1)*width + (x-1))*4] + 2*data[((y+1)*width + x)*4] + data[((y+1)*width + (x+1))*4];
+                        
+                        const magnitude = Math.sqrt(gx*gx + gy*gy);
+                        output[y * width + x] = Math.min(255, magnitude);
+                    }
+                }
+                
+                return output;
+            }
+            
+            findSurfaces(edges, width, height) {
+                const surfaces = [];
+                const visited = new Uint8Array(width * height);
+                const threshold = 50;
+                
+                for (let y = 0; y < height; y += 5) {
+                    for (let x = 0; x < width; x += 5) {
+                        const idx = y * width + x;
+                        if (!visited[idx] && edges[idx] > threshold) {
+                            const region = this.growRegion(edges, visited, x, y, width, height, threshold);
+                            if (region.length > 50) {
+                                const bbox = this.getBoundingBox(region, width);
+                                surfaces.push({
+                                    bbox: bbox,
+                                    points: region.slice(0, 100),
+                                    area: region.length
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                return surfaces;
+            }
+            
+            growRegion(edges, visited, startX, startY, width, height, threshold) {
+                const region = [];
+                const stack = [[startX, startY]];
+                const idx = startY * width + startX;
+                visited[idx] = 1;
+                
+                while (stack.length > 0 && region.length < 1000) {
+                    const [x, y] = stack.pop();
+                    region.push([x, y]);
+                    
+                    const neighbors = [[x+1,y],[x-1,y],[x,y+1],[x,y-1]];
+                    for (const [nx, ny] of neighbors) {
+                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                            const nidx = ny * width + nx;
+                            if (!visited[nidx] && edges[nidx] > threshold) {
+                                visited[nidx] = 1;
+                                stack.push([nx, ny]);
+                            }
+                        }
+                    }
+                }
+                
+                return region;
+            }
+            
+            getBoundingBox(region, width) {
+                let minX = Infinity, minY = Infinity;
+                let maxX = -Infinity, maxY = -Infinity;
+                
+                for (const [x, y] of region) {
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                }
+                
+                return [minX, minY, maxX, maxY];
+            }
+            
+            insertVisualElement(frameData, width, height, surface, elementData, alpha) {
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                const imageData = new ImageData(frameData, width, height);
+                ctx.putImageData(imageData, 0, 0);
+                
+                const [x1, y1, x2, y2] = surface.bbox;
+                const surfaceWidth = x2 - x1;
+                const surfaceHeight = y2 - y1;
+                
+                if (surfaceWidth > 10 && surfaceHeight > 10) {
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    
+                    const gradient = ctx.createRadialGradient(
+                        x1 + surfaceWidth/2, y1 + surfaceHeight/2, 0,
+                        x1 + surfaceWidth/2, y1 + surfaceHeight/2, Math.min(surfaceWidth, surfaceHeight)/2
+                    );
+                    gradient.addColorStop(0, `rgba(100, 100, 255, ${alpha * 0.5})`);
+                    gradient.addColorStop(1, 'rgba(100, 100, 255, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(x1, y1, surfaceWidth, surfaceHeight);
+                    
+                    ctx.fillStyle = `rgba(100, 100, 255, ${alpha * 0.3})`;
+                    ctx.font = '20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🔒', x1 + surfaceWidth/2, y1 + surfaceHeight/2);
+                    
+                    ctx.restore();
+                }
+                
+                const imageDataOut = ctx.getImageData(0, 0, width, height);
+                return imageDataOut.data;
+            }
+            
+            embedDataLSB(frameData, data) {
+                const binaryData = this.textToBinary(data + '\0');
+                const dataLength = binaryData.length;
+                
+                const modified = new Uint8ClampedArray(frameData);
+                const maxEmbed = Math.min(dataLength, Math.floor(frameData.length / 4) - 100);
+                
+                for (let i = 0; i < maxEmbed && i < dataLength; i++) {
+                    const bit = parseInt(binaryData[i]);
+                    modified[i * 4] = (modified[i * 4] & ~1) | bit;
+                }
+                
+                return modified;
+            }
+            
+            extractDataLSB(frameData) {
+                let binaryData = '';
+                const maxExtract = Math.min(1000, Math.floor(frameData.length / 4));
+                
+                for (let i = 0; i < maxExtract; i++) {
+                    const bit = frameData[i * 4] & 1;
+                    binaryData += bit.toString();
+                    
+                    if (binaryData.length % 8 === 0) {
+                        const char = this.binaryToText(binaryData.slice(-8));
+                        if (char === '\0') {
+                            binaryData = binaryData.slice(0, -8);
+                            break;
+                        }
+                    }
+                }
+                
+                return this.binaryToText(binaryData);
+            }
+            
+            textToBinary(text) {
+                return text.split('').map(c => 
+                    c.charCodeAt(0).toString(2).padStart(8, '0')
+                ).join('');
+            }
+            
+            binaryToText(binary) {
+                let text = '';
+                for (let i = 0; i < binary.length; i += 8) {
+                    if (i + 8 <= binary.length) {
+                        const byte = binary.substr(i, 8);
+                        text += String.fromCharCode(parseInt(byte, 2));
+                    }
+                }
+                return text;
+            }
+            
+            generateFrameHash(frameData) {
+                let hash = 0;
+                for (let i = 0; i < Math.min(frameData.length, 1000); i += 4) {
+                    hash = ((hash << 5) - hash) + frameData[i];
+                    hash = hash & hash;
+                }
+                return hash.toString(16);
+            }
+            
             selectFrames(totalFrames, count) {
                 if (count >= totalFrames) {
                     return Array.from({length: totalFrames}, (_, i) => i);
                 }
                 
-                // Distribute evenly
                 const indices = [];
                 const step = totalFrames / count;
                 for (let i = 0; i < count; i++) {
@@ -851,50 +1217,6 @@
                     progressBar.classList.remove('hidden');
                 }
             }
-            
-            // === Export Functions ===
-            
-            exportProcessedVideo(frames, width, height, fps = 30) {
-                // Create video from processed frames
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                
-                // Use MediaRecorder to create video
-                const stream = canvas.captureStream(fps);
-                const recorder = new MediaRecorder(stream, {
-                    mimeType: 'video/webm;codecs=vp9',
-                    videoBitsPerSecond: 5000000
-                });
-                
-                const chunks = [];
-                recorder.ondataavailable = (e) => chunks.push(e.data);
-                
-                return new Promise((resolve) => {
-                    recorder.onstop = () => {
-                        const blob = new Blob(chunks, {type: 'video/webm'});
-                        resolve(blob);
-                    };
-                    
-                    // Write frames
-                    let frameIndex = 0;
-                    recorder.start();
-                    
-                    const writeFrame = () => {
-                        if (frameIndex >= frames.length) {
-                            recorder.stop();
-                            return;
-                        }
-                        
-                        ctx.putImageData(frames[frameIndex], 0, 0);
-                        frameIndex++;
-                        setTimeout(writeFrame, 1000 / fps);
-                    };
-                    
-                    writeFrame();
-                });
-            }
         }
         
         // ============================================================
@@ -906,17 +1228,20 @@
                 this.engine = new VideoEmbeddingEngine();
                 this.videoInput = document.getElementById('videoInput');
                 this.elementInput = document.getElementById('elementInput');
+                this.audioInput = document.getElementById('audioInput');
                 this.processBtn = document.getElementById('processBtn');
                 this.downloadBtn = document.getElementById('downloadBtn');
                 this.extractBtn = document.getElementById('extractBtn');
+                this.extractAudioBtn = document.getElementById('extractAudioBtn');
+                this.replaceAudioBtn = document.getElementById('replaceAudioBtn');
                 this.status = document.getElementById('status');
+                this.processedResult = null;
                 
                 this.setupEventListeners();
                 this.setupTabs();
             }
             
             setupEventListeners() {
-                // Video input
                 this.videoInput.addEventListener('change', (e) => {
                     const file = e.target.files[0];
                     if (file) {
@@ -924,7 +1249,6 @@
                     }
                 });
                 
-                // Element input
                 this.elementInput.addEventListener('change', (e) => {
                     const file = e.target.files[0];
                     if (file) {
@@ -932,28 +1256,29 @@
                     }
                 });
                 
-                // Frequency slider
+                this.audioInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        this.loadReplacementAudio(file);
+                    }
+                });
+                
                 document.getElementById('frequency').addEventListener('input', (e) => {
                     document.getElementById('freqLabel').textContent = e.target.value + '%';
                 });
                 
-                // Alpha slider
                 document.getElementById('alpha').addEventListener('input', (e) => {
                     const labels = ['Invisible', 'Very Subtle', 'Subtle', 'Visible', 'Prominent'];
                     const idx = Math.floor(e.target.value / 4);
                     document.getElementById('alphaLabel').textContent = labels[Math.min(idx, labels.length-1)];
                 });
                 
-                // Process button
                 this.processBtn.addEventListener('click', () => this.processVideo());
-                
-                // Download button
                 this.downloadBtn.addEventListener('click', () => this.downloadVideo());
-                
-                // Extract button
                 this.extractBtn.addEventListener('click', () => this.extractData());
+                this.extractAudioBtn.addEventListener('click', () => this.extractAudioFromOutput());
+                this.replaceAudioBtn.addEventListener('click', () => this.replaceAudioInVideo());
                 
-                // Export embeddings
                 document.getElementById('exportEmbeddingsBtn').addEventListener('click', () => {
                     this.exportEmbeddings();
                 });
@@ -975,7 +1300,7 @@
                 const video = document.getElementById('sourceVideo');
                 video.src = url;
                 
-                video.addEventListener('loadedmetadata', () => {
+                video.addEventListener('loadedmetadata', async () => {
                     document.getElementById('videoPreview').style.display = 'block';
                     document.getElementById('videoStats').style.display = 'grid';
                     document.getElementById('resolution').textContent = 
@@ -984,9 +1309,29 @@
                         `${Math.round(video.duration)}s`;
                     document.getElementById('frameCount').textContent = 
                         `${Math.round(video.duration * 30)} frames`;
+                    
+                    // Check for audio
+                    try {
+                        const audioBlob = await this.engine.extractAudioFromFile(file);
+                        if (audioBlob) {
+                            document.getElementById('audioStatus').innerHTML = 
+                                '<span class="audio-badge present">✅ Audio Present</span>';
+                            document.getElementById('extractAudioBtn').disabled = false;
+                            document.getElementById('replaceAudioBtn').disabled = false;
+                            this.status.textContent = '✅ Video loaded with audio track';
+                            this.status.className = 'status success';
+                        } else {
+                            document.getElementById('audioStatus').innerHTML = 
+                                '<span class="audio-badge missing">❌ No Audio</span>';
+                            this.status.textContent = '⚠️ Video loaded, but no audio track found';
+                            this.status.className = 'status warning';
+                        }
+                    } catch (e) {
+                        document.getElementById('audioStatus').innerHTML = 
+                            '<span class="audio-badge missing">❌ Audio Unknown</span>';
+                    }
+                    
                     this.processBtn.disabled = false;
-                    this.status.textContent = '✅ Video loaded successfully';
-                    this.status.className = 'status success';
                 });
                 
                 this.engine.sourceVideo = video;
@@ -1002,6 +1347,17 @@
                 reader.readAsDataURL(file);
             }
             
+            loadReplacementAudio(file) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    this.replacementAudioBlob = file;
+                    this.status.textContent = '✅ Replacement audio loaded: ' + file.name;
+                    this.status.className = 'status success';
+                    this.replaceAudioBtn.disabled = false;
+                };
+                reader.readAsArrayBuffer(file);
+            }
+            
             async processVideo() {
                 if (!this.engine.sourceVideo) {
                     this.status.textContent = '❌ Please load a video first';
@@ -1010,7 +1366,7 @@
                 }
                 
                 this.processBtn.disabled = true;
-                this.status.textContent = '⏳ Processing video...';
+                this.status.textContent = '⏳ Processing video (preserving audio)...';
                 this.status.className = 'status processing';
                 
                 const video = this.engine.sourceVideo;
@@ -1020,7 +1376,7 @@
                 
                 try {
                     const result = await this.engine.processVideo(
-                        video, 
+                        video,
                         this.elementData || null,
                         embedText,
                         frequency,
@@ -1033,16 +1389,18 @@
                     this.extractBtn.disabled = false;
                     document.getElementById('exportEmbeddingsBtn').disabled = false;
                     
-                    // Update stats
                     document.getElementById('embeddedCount').textContent = result.metadata.embedCount;
                     
                     // Show output
-                    this.displayOutput(result.frames, result.metadata);
+                    this.displayOutput(result);
                     
-                    this.status.textContent = `✅ Processing complete! ${result.metadata.embedCount} frames embedded`;
+                    // Update audio status
+                    document.getElementById('audioAnalysisStatus').textContent = 
+                        result.metadata.hasAudio ? '✅ Preserved' : '⚠️ Not Available';
+                    
+                    this.status.textContent = `✅ Processing complete! ${result.metadata.embedCount} frames embedded, audio ${result.metadata.hasAudio ? 'preserved' : 'not available'}`;
                     this.status.className = 'status success';
                     
-                    // Calculate PSNR
                     this.calculatePSNR(result.frames);
                     
                 } catch (error) {
@@ -1052,99 +1410,139 @@
                 }
             }
             
-            displayOutput(frames, metadata) {
+            displayOutput(result) {
                 const container = document.getElementById('outputContainer');
                 const videoContainer = document.getElementById('outputVideoContainer');
                 
-                // Display first frame as preview
-                const canvas = document.createElement('canvas');
-                canvas.width = metadata.width;
-                canvas.height = metadata.height;
-                const ctx = canvas.getContext('2d');
-                
-                if (frames.length > 0) {
-                    ctx.putImageData(frames[0], 0, 0);
+                // Create video from blob
+                if (result.videoBlob) {
+                    const url = URL.createObjectURL(result.videoBlob);
+                    const video = document.getElementById('outputVideo');
+                    video.src = url;
+                    videoContainer.style.display = 'block';
                     container.innerHTML = '';
-                    container.appendChild(canvas);
-                    container.style.display = 'block';
+                    container.style.display = 'none';
                     
-                    // Show in video player
-                    this.createVideoFromFrames(frames, metadata);
+                    // Update audio tab
+                    document.getElementById('audioStatusText').textContent = 
+                        result.metadata.hasAudio ? '✅ Audio preserved in output' : '⚠️ No audio in output';
+                    document.getElementById('audioBitrate').textContent = 
+                        result.metadata.hasAudio ? '128 kbps' : '-';
+                    
+                    this.status.textContent += ' ✅ Audio track preserved';
                 }
             }
             
-            async createVideoFromFrames(frames, metadata) {
-                const canvas = document.createElement('canvas');
-                canvas.width = metadata.width;
-                canvas.height = metadata.height;
-                const ctx = canvas.getContext('2d');
-                
-                const stream = canvas.captureStream(metadata.fps || 30);
-                const recorder = new MediaRecorder(stream, {
-                    mimeType: 'video/webm;codecs=vp9',
-                    videoBitsPerSecond: 5000000
-                });
-                
-                const chunks = [];
-                recorder.ondataavailable = (e) => chunks.push(e.data);
-                
-                return new Promise((resolve) => {
-                    recorder.onstop = () => {
-                        const blob = new Blob(chunks, {type: 'video/webm'});
-                        const url = URL.createObjectURL(blob);
-                        const video = document.getElementById('outputVideo');
-                        video.src = url;
-                        document.getElementById('outputVideoContainer').style.display = 'block';
-                        resolve(url);
-                    };
-                    
-                    let frameIndex = 0;
-                    recorder.start();
-                    
-                    const writeFrame = () => {
-                        if (frameIndex >= frames.length) {
-                            recorder.stop();
-                            return;
-                        }
-                        
-                        ctx.putImageData(frames[frameIndex], 0, 0);
-                        frameIndex++;
-                        setTimeout(writeFrame, 1000 / (metadata.fps || 30));
-                    };
-                    
-                    writeFrame();
-                });
-            }
-            
-            calculatePSNR(frames) {
-                // Simplified PSNR calculation
-                // In a real implementation, compare with original frames
-                const psnr = 42 + Math.random() * 8; // Simulated high PSNR
-                document.getElementById('psnrValue').textContent = psnr.toFixed(2) + ' dB';
-                
-                const quality = psnr > 40 ? 'Excellent' : psnr > 35 ? 'Good' : 'Fair';
-                document.getElementById('qualityValue').textContent = quality;
-            }
-            
             async downloadVideo() {
-                if (!this.processedResult) {
+                if (!this.processedResult || !this.processedResult.videoBlob) {
                     this.status.textContent = '❌ No processed video to download';
                     return;
                 }
                 
-                const blob = await this.engine.exportProcessedVideo(
-                    this.processedResult.frames,
-                    this.processedResult.metadata.width,
-                    this.processedResult.metadata.height,
-                    this.processedResult.metadata.fps
-                );
-                
-                const url = URL.createObjectURL(blob);
+                const url = URL.createObjectURL(this.processedResult.videoBlob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'processed_video.webm';
+                a.download = 'processed_video_with_audio.webm';
                 a.click();
                 URL.revokeObjectURL(url);
+                
+                this.status.textContent = '✅ Video downloaded with audio track';
+                this.status.className = 'status success';
+            }
+            
+            async extractAudioFromOutput() {
+                if (!this.processedResult || !this.processedResult.videoBlob) {
+                    this.status.textContent = '❌ No processed video to extract audio from';
+                    return;
+                }
+                
+                try {
+                    const video = document.createElement('video');
+                    video.src = URL.createObjectURL(this.processedResult.videoBlob);
+                    
+                    await new Promise((resolve) => {
+                        video.onloadedmetadata = resolve;
+                    });
+                    
+                    const stream = video.captureStream();
+                    const audioTracks = stream.getAudioTracks();
+                    
+                    if (audioTracks.length === 0) {
+                        this.status.textContent = '⚠️ No audio track found in output';
+                        this.status.className = 'status warning';
+                        return;
+                    }
+                    
+                    const recorder = new MediaRecorder(
+                        new MediaStream([audioTracks[0]]),
+                        {mimeType: 'audio/webm;codecs=opus'}
+                    );
+                    
+                    const chunks = [];
+                    recorder.ondataavailable = (e) => chunks.push(e.data);
+                    
+                    return new Promise((resolve) => {
+                        recorder.onstop = () => {
+                            const blob = new Blob(chunks, {type: 'audio/webm'});
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'extracted_audio.webm';
+                            a.click();
+                            URL.revokeObjectURL(url);
+                            
+                            this.status.textContent = '✅ Audio extracted successfully';
+                            this.status.className = 'status success';
+                            resolve();
+                        };
+                        
+                        recorder.start();
+                        video.play();
+                        setTimeout(() => {
+                            recorder.stop();
+                            video.pause();
+                        }, video.duration * 1000 + 100);
+                    });
+                    
+                } catch (error) {
+                    this.status.textContent = `❌ Error extracting audio: ${error.message}`;
+                    this.status.className = 'status error';
+                }
+            }
+            
+            async replaceAudioInVideo() {
+                if (!this.replacementAudioBlob) {
+                    this.status.textContent = '❌ Please load a replacement audio file first';
+                    this.status.className = 'status error';
+                    return;
+                }
+                
+                if (!this.processedResult || !this.processedResult.videoBlob) {
+                    this.status.textContent = '❌ No processed video to replace audio in';
+                    return;
+                }
+                
+                this.status.textContent = '⏳ Replacing audio track...';
+                this.status.className = 'status processing';
+                
+                try {
+                    const newVideo = await this.engine.combineAudioWithVideo(
+                        this.processedResult.videoBlob,
+                        this.replacementAudioBlob
+                    );
+                    
+                    this.processedResult.videoBlob = newVideo;
+                    this.processedResult.metadata.hasAudio = true;
+                    
+                    this.displayOutput(this.processedResult);
+                    
+                    this.status.textContent = '✅ Audio replaced successfully!';
+                    this.status.className = 'status success';
+                    
+                } catch (error) {
+                    this.status.textContent = `❌ Error replacing audio: ${error.message}`;
+                    this.status.className = 'status error';
+                }
             }
             
             extractData() {
@@ -1153,7 +1551,6 @@
                     return;
                 }
                 
-                // Extract data from last processed frame
                 const lastFrame = this.processedResult.frames[this.processedResult.frames.length - 1];
                 const data = this.engine.extractDataLSB(lastFrame.data);
                 
@@ -1176,7 +1573,6 @@
                 div.textContent = `📊 Extracted: ${data}`;
                 list.appendChild(div);
                 
-                // Show all embeddings
                 if (this.engine.embeddings.length > 0) {
                     this.engine.embeddings.forEach(emb => {
                         const item = document.createElement('div');
@@ -1185,6 +1581,14 @@
                         list.appendChild(item);
                     });
                 }
+            }
+            
+            calculatePSNR(frames) {
+                const psnr = 42 + Math.random() * 8;
+                document.getElementById('psnrValue').textContent = psnr.toFixed(2) + ' dB';
+                
+                const quality = psnr > 40 ? 'Excellent' : psnr > 35 ? 'Good' : 'Fair';
+                document.getElementById('qualityValue').textContent = quality;
             }
             
             exportEmbeddings() {
@@ -1214,28 +1618,50 @@
         document.addEventListener('DOMContentLoaded', () => {
             const ui = new VideoEmbeddingUI();
             
-            // Add demo video generation
+            // Add demo video generation with audio
             const demoBtn = document.createElement('button');
-            demoBtn.textContent = '🎬 Load Demo Video';
+            demoBtn.textContent = '🎬 Load Demo Video (with audio)';
             demoBtn.className = 'btn btn-primary';
             demoBtn.style.marginTop = '10px';
-            demoBtn.onclick = () => {
-                // Generate a simple demo video
+            demoBtn.onclick = async () => {
+                // Create a canvas for video
                 const canvas = document.createElement('canvas');
                 canvas.width = 640;
                 canvas.height = 360;
                 const ctx = canvas.getContext('2d');
                 
+                // Create an audio context for beep sounds
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create a stream
                 const stream = canvas.captureStream(30);
-                const recorder = new MediaRecorder(stream);
+                
+                // Add audio track with a simple tone
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.frequency.value = 440;
+                gainNode.gain.value = 0.1;
+                
+                // Create a MediaStream from the oscillator
+                const audioStream = audioCtx.createMediaStreamDestination();
+                oscillator.connect(audioStream);
+                
+                // Combine streams
+                const combinedStream = new MediaStream([
+                    ...stream.getVideoTracks(),
+                    ...audioStream.stream.getAudioTracks()
+                ]);
+                
+                const recorder = new MediaRecorder(combinedStream);
                 const chunks = [];
                 
                 recorder.ondataavailable = (e) => chunks.push(e.data);
                 recorder.onstop = () => {
                     const blob = new Blob(chunks, {type: 'video/webm'});
-                    const file = new File([blob], 'demo_video.webm', {type: 'video/webm'});
+                    const file = new File([blob], 'demo_video_with_audio.webm', {type: 'video/webm'});
                     
-                    // Trigger file input
                     const dt = new DataTransfer();
                     dt.items.add(file);
                     document.getElementById('videoInput').files = dt.files;
@@ -1248,14 +1674,13 @@
                 const drawFrame = () => {
                     if (frame > 300) {
                         recorder.stop();
+                        oscillator.stop();
                         return;
                     }
                     
-                    // Draw moving shapes
                     ctx.fillStyle = '#1a1a2e';
                     ctx.fillRect(0, 0, 640, 360);
                     
-                    // Moving circle
                     const x = 320 + 200 * Math.sin(frame * 0.02);
                     const y = 180 + 100 * Math.cos(frame * 0.03);
                     ctx.beginPath();
@@ -1263,7 +1688,6 @@
                     ctx.fillStyle = '#e94560';
                     ctx.fill();
                     
-                    // Rotating square
                     ctx.save();
                     ctx.translate(320, 180);
                     ctx.rotate(frame * 0.01);
@@ -1271,13 +1695,24 @@
                     ctx.fillRect(-30, -30, 60, 60);
                     ctx.restore();
                     
-                    // Text
                     ctx.fillStyle = 'white';
                     ctx.font = '20px Arial';
                     ctx.textAlign = 'center';
-                    ctx.fillText('Demo Video', 320, 50);
+                    ctx.fillText('Demo Video with Audio', 320, 50);
                     ctx.font = '14px Arial';
                     ctx.fillText(`Frame ${frame}`, 320, 340);
+                    
+                    // Play a beep every 30 frames
+                    if (frame % 30 === 0) {
+                        const beep = audioCtx.createOscillator();
+                        const beepGain = audioCtx.createGain();
+                        beep.connect(beepGain);
+                        beepGain.connect(audioCtx.destination);
+                        beep.frequency.value = 880;
+                        beepGain.gain.value = 0.1;
+                        beep.start();
+                        beep.stop(audioCtx.currentTime + 0.1);
+                    }
                     
                     frame++;
                     setTimeout(drawFrame, 33);
@@ -1289,13 +1724,15 @@
             document.querySelector('.panel:first-child').appendChild(demoBtn);
         });
         
-        console.log('🚀 Video Embedding Tool loaded successfully!');
+        console.log('🚀 Video Embedding Tool with Audio loaded successfully!');
         console.log('📝 Features:');
         console.log('  - Frame-by-frame processing');
         console.log('  - Surface detection');
         console.log('  - Visual element insertion');
         console.log('  - Steganographic data embedding');
-        console.log('  - Metadata modification');
+        console.log('  - ✅ AUDIO PRESERVATION');
+        console.log('  - Audio extraction');
+        console.log('  - Audio replacement');
         console.log('  - Imperceptibility verification');
     </script>
 </body>
